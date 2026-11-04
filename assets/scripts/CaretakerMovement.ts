@@ -1,4 +1,4 @@
-import { _decorator, Component, EventTouch, game, Game, Node, Vec2 } from 'cc';
+import { _decorator, Component, EventTouch, game, Game, Node, UITransform, Vec2, Vec3 } from 'cc';
 
 const { ccclass, property } = _decorator;
 
@@ -8,6 +8,10 @@ export class CaretakerMovement extends Component {
     @property(Node)
     caretaker: Node | null = null;
 
+    // Only these explicitly assigned scene objects are solid; labels are not.
+    @property([Node])
+    obstacles: Node[] = [];
+
     // Scene units per second. Bounds account for the 56-unit caretaker placeholder.
     private readonly speed = 200;
     private readonly deadZone = 12;
@@ -16,6 +20,9 @@ export class CaretakerMovement extends Component {
     private readonly maxX = 295;
     private readonly minY = -425;
     private readonly maxY = 425;
+    private readonly footHalfWidth = 13;
+    private readonly footHalfHeight = 10;
+    private readonly footOffsetY = -12;
 
     private activeTouchId: number | null = null;
     private readonly origin = new Vec2();
@@ -72,10 +79,48 @@ export class CaretakerMovement extends Component {
     }
 
     protected update(deltaTime: number): void {
-        if (!this.caretaker || (this.input.x === 0 && this.input.y === 0)) return;
+        if (!this.caretaker || !this.caretaker.parent || (this.input.x === 0 && this.input.y === 0)) return;
         const position = this.caretaker.position;
-        const x = Math.max(this.minX, Math.min(this.maxX, position.x + this.input.x * this.speed * deltaTime));
-        const y = Math.max(this.minY, Math.min(this.maxY, position.y + this.input.y * this.speed * deltaTime));
+        const startX = position.x;
+        const startY = position.y + this.footOffsetY;
+        let x = Math.max(this.minX, Math.min(this.maxX, startX + this.input.x * this.speed * deltaTime));
+        let footY = Math.max(this.minY, Math.min(this.maxY, position.y + this.input.y * this.speed * deltaTime)) + this.footOffsetY;
+
+        // Expand each obstacle by the foot footprint, then sweep each axis.
+        // Checking the whole distance avoids passing through thin walls on slow frames.
+        const bounds = this.obstacles.filter((obstacle) => obstacle && obstacle.activeInHierarchy)
+            .map((obstacle) => this.obstacleBounds(obstacle, this.caretaker!.parent!))
+            .filter((bounds): bounds is { left: number; right: number; bottom: number; top: number } => bounds !== null);
+
+        for (const box of bounds) {
+            if (startY <= box.bottom || startY >= box.top) continue;
+            if (x > startX && startX <= box.left && x > box.left) x = box.left;
+            if (x < startX && startX >= box.right && x < box.right) x = box.right;
+        }
+        for (const box of bounds) {
+            if (x <= box.left || x >= box.right) continue;
+            if (footY > startY && startY <= box.bottom && footY > box.bottom) footY = box.bottom;
+            if (footY < startY && startY >= box.top && footY < box.top) footY = box.top;
+        }
+
+        const y = footY - this.footOffsetY;
         this.caretaker.setPosition(x, y, position.z);
+    }
+
+    private obstacleBounds(obstacle: Node, parent: Node): { left: number; right: number; bottom: number; top: number } | null {
+        const transform = obstacle.getComponent(UITransform);
+        if (!transform) return null;
+        const box = transform.getBoundingBoxToWorld();
+        const corners = [
+            new Vec3(box.xMin, box.yMin, 0), new Vec3(box.xMax, box.yMin, 0),
+            new Vec3(box.xMin, box.yMax, 0), new Vec3(box.xMax, box.yMax, 0),
+        ];
+        for (const corner of corners) parent.inverseTransformPoint(corner, corner);
+        return {
+            left: Math.min(...corners.map((p) => p.x)) - this.footHalfWidth,
+            right: Math.max(...corners.map((p) => p.x)) + this.footHalfWidth,
+            bottom: Math.min(...corners.map((p) => p.y)) - this.footHalfHeight,
+            top: Math.max(...corners.map((p) => p.y)) + this.footHalfHeight,
+        };
     }
 }
