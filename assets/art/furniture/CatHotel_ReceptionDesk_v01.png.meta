@@ -1,0 +1,142 @@
+{
+  "ver": "1.0.27",
+  "importer": "image",
+  "imported": true,
+  "uuid": "4a93830b-554a-4774-a874-7ca979efb559",
+  "files": [
+    ".json",
+    ".png"
+  ],
+  "subMetas": {
+    "f9941": {
+      "importer": "sprite-frame",
+      "uuid": "4a93830b-554a-4774-a874-7ca979efb559@f9941",
+      "displayName": "CatHotel_ReceptionDesk_v01",
+      "id": "f9941",
+      "name": "spriteFrame",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "premultiplyAlpha": false,
+        "generateMipmap": false,
+        "anisotropy": 1,
+        "trimType": "none",
+        "trimThreshold": 1,
+        "rotated": false,
+        "offsetX": 0,
+        "offsetY": 0,
+        "trimX": 0,
+        "trimY": 0,
+        "width": 355,
+        "height": 232,
+        "rawWidth": 355,
+        "rawHeight": 232,
+        "borderTop": 0,
+        "borderBottom": 0,
+        "borderLeft": 0,
+        "borderRight": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "4a93830b-554a-4774-a874-7ca979efb559@6c48a",
+        "atlasUuid": "",
+        "mipfilter": "none",
+        "packable": false,
+        "vertices": {
+          "rawPosition": [
+            -177.5,
+            -116,
+            0,
+            177.5,
+            -116,
+            0,
+            -177.5,
+            116,
+            0,
+            177.5,
+            116,
+            0
+          ],
+          "indexes": [
+            0,
+            1,
+            2,
+            2,
+            1,
+            3
+          ],
+          "uv": [
+            0,
+            232,
+            355,
+            232,
+            0,
+            0,
+            355,
+            0
+          ],
+          "nuv": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          "minPos": [
+            -177.5,
+            -116,
+            0
+          ],
+          "maxPos": [
+            177.5,
+            116,
+            0
+          ]
+        },
+        "pixelsToUnit": 100,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "meshType": 0
+      },
+      "ver": "1.0.12",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "6c48a": {
+      "importer": "texture",
+      "uuid": "4a93830b-554a-4774-a874-7ca979efb559@6c48a",
+      "displayName": "CatHotel_ReceptionDesk_v01",
+      "id": "6c48a",
+      "name": "texture",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "none",
+        "anisotropy": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "4a93830b-554a-4774-a874-7ca979efb559",
+        "visible": false
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "type": "sprite-frame",
+    "fixAlphaTransparencyArtifacts": false,
+    "hasAlpha": true,
+    "redirect": "4a93830b-554a-4774-a874-7ca979efb559@6c48a"
+  }
+}
