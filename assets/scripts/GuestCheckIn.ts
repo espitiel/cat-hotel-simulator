@@ -1,8 +1,10 @@
-import { _decorator, Component, game, Game, Label, Node } from 'cc';
+import { _decorator, CCString, Component, game, Game, Label, Node } from 'cc';
 import { CustomerArrival } from './CustomerArrival';
 import { ProximityInteraction } from './ProximityInteraction';
 import { CatNeeds } from './CatNeeds';
 import { RoomCleanliness } from './RoomCleanliness';
+import { careQuality, HotelWallet, satisfactionRating } from './HotelEconomy';
+import type { CareRating } from './HotelEconomy';
 
 const { ccclass, property } = _decorator;
 
@@ -20,6 +22,24 @@ export interface CompletedStaySnapshot {
     readonly happiness: number;
     readonly energy: number;
     readonly cleanliness: number;
+    readonly trackedDuration: number;
+    readonly averageCareQuality: number;
+    readonly finalCareQuality: number;
+    readonly overallSatisfaction: number;
+    readonly satisfactionScore: number;
+    readonly rating: CareRating;
+    readonly multiplier: number;
+}
+
+export interface CheckoutReceipt {
+    readonly stayId: number;
+    readonly roomId: number;
+    readonly score: number;
+    readonly rating: CareRating;
+    readonly basePayment: number;
+    readonly multiplier: number;
+    readonly earned: number;
+    readonly balance: number;
 }
 
 interface GuestStay {
@@ -32,6 +52,8 @@ interface GuestStay {
     state: StayState;
     checkedOut: boolean;
     snapshot: Readonly<CompletedStaySnapshot> | null;
+    weightedQualitySum: number;
+    trackedDuration: number;
 }
 
 interface GuestRoom {
@@ -60,11 +82,20 @@ export class GuestCheckIn extends Component {
     @property([Node])
     additionalGuestCats: Node[] = [];
 
-    @property([String])
+    @property([CCString])
     guestCatIds: string[] = [];
 
     @property([Label])
     roomStatusLabels: Label[] = [];
+
+    @property(Label)
+    coinLabel: Label | null = null;
+
+    @property(Label)
+    checkoutSummary: Label | null = null;
+
+    @property(Node)
+    checkoutSummaryPanel: Node | null = null;
 
     private rooms: GuestRoom[] = [];
     private nextStayId = 1;
@@ -76,6 +107,9 @@ export class GuestCheckIn extends Component {
     private arrivalDelay = 0;
     private gameInactive = false;
     private skipResumeFrame = false;
+    private readonly wallet = new HotelWallet();
+    private readonly standardRoomBasePayment = 100;
+    private lastCheckoutReceipt: Readonly<CheckoutReceipt> | null = null;
 
     protected onLoad(): void {
         const visuals = [this.guestCat, ...this.additionalGuestCats];
@@ -85,6 +119,8 @@ export class GuestCheckIn extends Component {
             needs: null, cleanliness: null, stay: null,
         }));
         for (const room of this.rooms) if (room.catVisual) room.catVisual.active = false;
+        this.updateCoinLabel();
+        if (this.checkoutSummaryPanel) this.checkoutSummaryPanel.active = false;
         this.updateRoomLabels();
     }
 
@@ -98,6 +134,8 @@ export class GuestCheckIn extends Component {
         this.node.off('interaction', this.interact, this);
         game.off(Game.EVENT_HIDE, this.onGameHide, this);
         game.off(Game.EVENT_SHOW, this.onGameShow, this);
+        this.unschedule(this.hideCheckoutSummary);
+        if (this.checkoutSummaryPanel) this.checkoutSummaryPanel.active = false;
     }
 
     private onGameHide(): void { this.gameInactive = true; }
@@ -124,27 +162,48 @@ export class GuestCheckIn extends Component {
             if (!stay || stay.state !== 'Active' || !needs || !room.cleanliness) continue;
             const before = stay.remaining;
             const elapsed = Math.min(deltaTime, before);
+            const qualityBefore = careQuality({
+                hunger: needs.hunger, happiness: needs.happiness,
+                cleanliness: room.cleanliness.cleanliness, energy: needs.energy,
+            });
+            let beforeEnergyChange = elapsed;
             // A rest must finish strictly before the stay deadline to earn energy.
             const expires = deltaTime >= before;
             if (needs.resting && (!expires || needs.restSecondsRemaining < before)) {
+                const restTime = needs.restSecondsRemaining;
                 if (needs.advanceRest(elapsed)) {
+                    beforeEnergyChange = Math.min(elapsed, restTime);
                     changed = true;
                     completedRestCount++;
                     completedRoomIds += (completedRoomIds ? ' & ' : '') + room.id;
                     lastRestMessage = `Room ${room.id} Cat Rested! Energy: ${needs.energy}/100`;
                 }
             }
+            const qualityAfter = careQuality({
+                hunger: needs.hunger, happiness: needs.happiness,
+                cleanliness: room.cleanliness.cleanliness, energy: needs.energy,
+            });
+            stay.weightedQualitySum += qualityBefore * beforeEnergyChange +
+                qualityAfter * (elapsed - beforeEnergyChange);
+            stay.trackedDuration += elapsed;
             stay.remaining = Math.max(0, before - deltaTime);
             if (!expires) continue;
             needs.lock();
             room.cleanliness.lock();
             stay.state = 'ReadyForPickup';
             changed = true;
+            const average = stay.trackedDuration > 0
+                ? stay.weightedQualitySum / stay.trackedDuration : qualityAfter;
+            const satisfaction = satisfactionRating(average, qualityAfter);
             stay.snapshot = Object.freeze({
                 stayId: stay.id, customerVisitId: stay.customerVisitId,
                 roomId: stay.roomId, catId: stay.catId, duration: stay.duration,
                 hunger: needs.hunger, happiness: needs.happiness,
                 energy: needs.energy, cleanliness: room.cleanliness.cleanliness,
+                trackedDuration: stay.trackedDuration,
+                averageCareQuality: average, finalCareQuality: qualityAfter,
+                overallSatisfaction: satisfaction.overall, satisfactionScore: satisfaction.score,
+                rating: satisfaction.rating, multiplier: satisfaction.multiplier,
             });
             this.pickupQueue.push(stay.id);
         }
@@ -186,6 +245,7 @@ export class GuestCheckIn extends Component {
         room.stay = {
             id: this.nextStayId++, customerVisitId: visit.id, roomId: room.id,
             catId, duration, remaining: duration, state: 'Active', checkedOut: false, snapshot: null,
+            weightedQualitySum: 0, trackedDuration: 0,
         };
         room.catVisual.active = true;
         this.currentVisit = null;
@@ -200,13 +260,27 @@ export class GuestCheckIn extends Component {
         const room = this.rooms.find((entry) => entry.stay?.id === visit.stayId);
         const stay = room?.stay;
         if (!room || !stay || stay.state !== 'ReadyForPickup' || stay.checkedOut || !stay.snapshot ||
-            !this.pickupQueue.includes(stay.id)) {
+            stay.snapshot.stayId !== stay.id || stay.snapshot.roomId !== room.id ||
+            this.pickupQueue.indexOf(stay.id) < 0) {
             this.reception.showMessage('Pickup is no longer available.');
+            return;
+        }
+        const snapshot = stay.snapshot;
+        const earned = Math.round(this.standardRoomBasePayment * snapshot.multiplier);
+        if (!this.wallet.canCreditCheckout(stay.id, earned)) {
+            this.reception.showMessage('Checkout payment unavailable.');
             return;
         }
         if (!this.customer.completeVisit()) return;
         stay.state = 'CheckingOut';
         stay.checkedOut = true;
+        // This is synchronous; the same validated stay cannot be settled twice.
+        this.wallet.creditCheckout(stay.id, earned);
+        this.lastCheckoutReceipt = Object.freeze({
+            stayId: stay.id, roomId: room.id, score: snapshot.satisfactionScore,
+            rating: snapshot.rating, basePayment: this.standardRoomBasePayment,
+            multiplier: snapshot.multiplier, earned, balance: this.wallet.balance,
+        });
         room.needs?.cancelRest();
         stay.state = 'Completed';
         this.completedStays.push(stay.snapshot);
@@ -222,6 +296,8 @@ export class GuestCheckIn extends Component {
         this.updateRoomLabels();
         this.node.emit('stay-changed');
         this.reception.showMessage(`Checkout Complete! Room ${room.id} Available.`);
+        this.updateCoinLabel();
+        this.showCheckoutSummary(this.lastCheckoutReceipt);
     }
 
     private startNextVisitIfPossible(): void {
@@ -248,8 +324,10 @@ export class GuestCheckIn extends Component {
             let text = 'Empty';
             if (room.stay?.state === 'Active') {
                 const seconds = Math.ceil(room.stay.remaining);
-                const minutesText = Math.floor(seconds / 60).toString().padStart(2, '0');
-                const secondsText = (seconds % 60).toString().padStart(2, '0');
+                const minutes = Math.floor(seconds / 60);
+                const remainder = seconds % 60;
+                const minutesText = (minutes < 10 ? '0' : '') + minutes;
+                const secondsText = (remainder < 10 ? '0' : '') + remainder;
                 text = `Occupied ${minutesText}:${secondsText}`;
             } else if (room.stay?.state === 'ReadyForPickup') {
                 text = 'Ready for Pickup';
@@ -287,5 +365,28 @@ export class GuestCheckIn extends Component {
 
     public getCompletedStays(): ReadonlyArray<Readonly<CompletedStaySnapshot>> {
         return this.completedStays.slice();
+    }
+
+    public getCoinBalance(): number { return this.wallet.balance; }
+    public hasPaidForStay(stayId: number): boolean { return this.wallet.hasPaid(stayId); }
+    public getLastCheckoutReceipt(): Readonly<CheckoutReceipt> | null { return this.lastCheckoutReceipt; }
+
+    private updateCoinLabel(): void {
+        if (this.coinLabel) this.coinLabel.string = `Coins: ${this.wallet.balance}`;
+    }
+
+    private showCheckoutSummary(receipt: Readonly<CheckoutReceipt>): void {
+        if (!this.checkoutSummary || !this.checkoutSummaryPanel) return;
+        this.checkoutSummary.string = `Checkout Complete!  Room ${receipt.roomId}\n` +
+            `Care: ${receipt.rating} (${receipt.score}/100)\n` +
+            `Base: ${receipt.basePayment} Coins  × ${receipt.multiplier.toFixed(2)}\n` +
+            `Earned: +${receipt.earned} Coins\nBalance: ${receipt.balance} Coins`;
+        this.checkoutSummaryPanel.active = true;
+        this.unschedule(this.hideCheckoutSummary);
+        this.scheduleOnce(this.hideCheckoutSummary, 5);
+    }
+
+    private hideCheckoutSummary(): void {
+        if (this.checkoutSummaryPanel) this.checkoutSummaryPanel.active = false;
     }
 }
