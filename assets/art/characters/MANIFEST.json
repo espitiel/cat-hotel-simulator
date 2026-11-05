@@ -1,0 +1,149 @@
+{
+  "project": "Cat Hotel Simulator",
+  "version": "Character Visual v0.2",
+  "editor": "Cocos Creator 3.8.8",
+  "status": "static artwork only, not pre-aligned animation frames",
+  "canvas_scene": [
+    720,
+    1280
+  ],
+  "assets": [
+    {
+      "file": "caretaker/caretaker_front_idle_v02.png",
+      "size": [
+        224,
+        224
+      ],
+      "subject_bounds": [
+        67,
+        11,
+        157,
+        168
+      ]
+    },
+    {
+      "file": "caretaker/caretaker_right_pose_v02.png",
+      "size": [
+        224,
+        224
+      ],
+      "subject_bounds": [
+        64,
+        11,
+        159,
+        168
+      ]
+    },
+    {
+      "file": "caretaker/caretaker_back_idle_v02.png",
+      "size": [
+        224,
+        224
+      ],
+      "subject_bounds": [
+        66,
+        11,
+        157,
+        168
+      ]
+    },
+    {
+      "file": "human_customers/customer_woman_pink_idle_v02.png",
+      "size": [
+        184,
+        184
+      ],
+      "subject_bounds": [
+        42,
+        0,
+        142,
+        142
+      ]
+    },
+    {
+      "file": "human_customers/customer_man_green_idle_v02.png",
+      "size": [
+        184,
+        184
+      ],
+      "subject_bounds": [
+        54,
+        0,
+        131,
+        142
+      ]
+    },
+    {
+      "file": "guest_cats/cat_gray_white_idle_v02.png",
+      "size": [
+        192,
+        192
+      ],
+      "subject_bounds": [
+        32,
+        6,
+        159,
+        156
+      ]
+    },
+    {
+      "file": "guest_cats/cat_gray_white_walk_pose_v02.png",
+      "size": [
+        192,
+        192
+      ],
+      "subject_bounds": [
+        21,
+        6,
+        171,
+        156
+      ]
+    },
+    {
+      "file": "guest_cats/cat_orange_tabby_idle_v02.png",
+      "size": [
+        192,
+        192
+      ],
+      "subject_bounds": [
+        32,
+        6,
+        161,
+        156
+      ]
+    },
+    {
+      "file": "guest_cats/cat_black_idle_v02.png",
+      "size": [
+        192,
+        192
+      ],
+      "subject_bounds": [
+        31,
+        6,
+        161,
+        156
+      ]
+    },
+    {
+      "file": "guest_cats/cat_calico_idle_v02.png",
+      "size": [
+        192,
+        192
+      ],
+      "subject_bounds": [
+        31,
+        6,
+        161,
+        156
+      ]
+    }
+  ],
+  "notes": [
+    "Human customers are NPCs, cats are separate guest animals, never substitute a cat for customer.",
+    "Keep caretaker parent node 56x56 visual and 26x20 collision footprint with center at y=-12.",
+    "Keep human customer visual 46x46 and its existing customer route/Waiting Indicator.",
+    "Directions are concept poses only. Do not animate by swapping them until feet/scale checked in Cocos Preview.",
+    "Do not enable bonus guest cats in scene before implementing the cat gameplay system."
+  ]
+}
