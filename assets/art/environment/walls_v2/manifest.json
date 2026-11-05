@@ -1,0 +1,165 @@
+{
+  "version": "v2.0",
+  "style": "approved glossy copper / caramel brown wall strips",
+  "scene_wall_thickness_units": 18,
+  "sprite_count": 21,
+  "files": [
+    {
+      "file": "wall_horizontal_top.png",
+      "size": [
+        256,
+        18
+      ]
+    },
+    {
+      "file": "wall_horizontal_bottom.png",
+      "size": [
+        256,
+        18
+      ]
+    },
+    {
+      "file": "wall_vertical_left.png",
+      "size": [
+        18,
+        256
+      ]
+    },
+    {
+      "file": "wall_vertical_right.png",
+      "size": [
+        18,
+        256
+      ]
+    },
+    {
+      "file": "corner_top_left.png",
+      "size": [
+        36,
+        36
+      ]
+    },
+    {
+      "file": "corner_top_right.png",
+      "size": [
+        36,
+        36
+      ]
+    },
+    {
+      "file": "corner_bottom_left.png",
+      "size": [
+        36,
+        36
+      ]
+    },
+    {
+      "file": "corner_bottom_right.png",
+      "size": [
+        36,
+        36
+      ]
+    },
+    {
+      "file": "end_horizontal_top_left.png",
+      "size": [
+        36,
+        18
+      ]
+    },
+    {
+      "file": "end_horizontal_top_right.png",
+      "size": [
+        36,
+        18
+      ]
+    },
+    {
+      "file": "end_horizontal_bottom_left.png",
+      "size": [
+        36,
+        18
+      ]
+    },
+    {
+      "file": "end_horizontal_bottom_right.png",
+      "size": [
+        36,
+        18
+      ]
+    },
+    {
+      "file": "end_vertical_left_top.png",
+      "size": [
+        18,
+        36
+      ]
+    },
+    {
+      "file": "end_vertical_left_bottom.png",
+      "size": [
+        18,
+        36
+      ]
+    },
+    {
+      "file": "end_vertical_right_top.png",
+      "size": [
+        18,
+        36
+      ]
+    },
+    {
+      "file": "end_vertical_right_bottom.png",
+      "size": [
+        18,
+        36
+      ]
+    },
+    {
+      "file": "junction_t_left.png",
+      "size": [
+        36,
+        36
+      ]
+    },
+    {
+      "file": "junction_t_right.png",
+      "size": [
+        36,
+        36
+      ]
+    },
+    {
+      "file": "junction_t_up.png",
+      "size": [
+        36,
+        36
+      ]
+    },
+    {
+      "file": "junction_t_down.png",
+      "size": [
+        36,
+        36
+      ]
+    },
+    {
+      "file": "junction_cross.png",
+      "size": [
+        36,
+        36
+      ]
+    }
+  ],
+  "seam_tests": {
+    "TL\u2192top horizontal": true,
+    "top horizontal\u2192TR": true,
+    "TL\u2193left vertical": true,
+    "left vertical\u2193BL": true,
+    "bottom horizontal\u2192BR": true,
+    "right vertical\u2193BR": true,
+    "horizontal repeat": true,
+    "vertical repeat": true
+  }
+}
