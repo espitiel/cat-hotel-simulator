@@ -54,15 +54,20 @@ export class ProximityInteraction extends Component {
 
     private interact(): void {
         if (!this.isInRange()) return;
+        this.showMessage(this.messageText);
+        // Future hotel objects can listen for this event to perform their own action.
+        this.node.emit('interaction', this);
+    }
+
+    /** Show brief feedback without adding another input-blocking UI element. */
+    public showMessage(text: string): void {
         if (this.messageNode) {
             const label = this.messageNode.getComponent(Label);
-            if (label) label.string = this.messageText;
+            if (label) label.string = text;
             this.messageNode.active = true;
             this.unschedule(this.hideMessage);
             this.scheduleOnce(this.hideMessage, Math.max(0, this.messageDuration));
         }
-        // Future hotel objects can listen for this event to perform their own action.
-        this.node.emit('interaction', this);
     }
 
     private hideMessage(): void {
