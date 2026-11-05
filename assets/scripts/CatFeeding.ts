@@ -4,7 +4,7 @@ import { ProximityInteraction } from './ProximityInteraction';
 
 const { ccclass, property } = _decorator;
 
-/** One contextual Feed button shared by all configured guest rooms. */
+/** Contextual cat-care actions shared by all configured guest rooms. */
 @ccclass('CatFeeding')
 export class CatFeeding extends Component {
     @property(GuestCheckIn)
@@ -19,6 +19,9 @@ export class CatFeeding extends Component {
     @property(Node)
     feedButton: Node | null = null;
 
+    @property(Node)
+    petButton: Node | null = null;
+
     // These arrays follow the room order in GuestCheckIn.
     @property([Node])
     roomFloors: Node[] = [];
@@ -28,6 +31,9 @@ export class CatFeeding extends Component {
 
     @property([Label])
     hungerLabels: Label[] = [];
+
+    @property([Label])
+    happinessLabels: Label[] = [];
 
     @property
     interactionRange = 48;
@@ -43,16 +49,24 @@ export class CatFeeding extends Component {
             this.feedButton.on(Node.EventType.TOUCH_END, this.feed, this);
             this.feedButton.active = false;
         }
+        if (this.petButton) {
+            this.petButton.on(Node.EventType.TOUCH_END, this.pet, this);
+            this.petButton.active = false;
+        }
     }
 
     protected onDisable(): void {
         this.feedButton?.off(Node.EventType.TOUCH_END, this.feed, this);
+        this.petButton?.off(Node.EventType.TOUCH_END, this.pet, this);
         if (this.feedButton) this.feedButton.active = false;
+        if (this.petButton) this.petButton.active = false;
     }
 
     protected update(): void {
-        this.updateHungerLabels();
-        if (this.feedButton) this.feedButton.active = this.eligibleRoom() !== 0;
+        this.updateCareLabels();
+        const eligible = this.eligibleRoom() !== 0;
+        if (this.feedButton) this.feedButton.active = eligible;
+        if (this.petButton) this.petButton.active = eligible;
     }
 
     private eligibleRoom(): number {
@@ -86,18 +100,40 @@ export class CatFeeding extends Component {
             return;
         }
         const hunger = needs.feed();
-        this.updateHungerLabels();
+        this.updateCareLabels();
         this.feedback?.showMessage(hunger === 0
             ? `Room ${roomId} Cat is Full!`
             : `Room ${roomId} Cat Fed! Hunger: ${hunger}/100`);
     }
 
-    private updateHungerLabels(): void {
+    private pet(): void {
+        // Reuse the feeding check, including the room boundary and distance.
+        const roomId = this.eligibleRoom();
+        const needs = roomId && this.checkIn ? this.checkIn.getCatNeeds(roomId) : null;
+        if (!needs) return;
+        if (needs.happiness === 100) {
+            this.feedback?.showMessage('Cat is Already Happy!');
+            return;
+        }
+        const happiness = needs.pet();
+        this.updateCareLabels();
+        this.feedback?.showMessage(happiness === 100
+            ? `Room ${roomId} Cat is Very Happy!`
+            : `Room ${roomId} Cat Petted! Happiness: ${happiness}/100`);
+    }
+
+    private updateCareLabels(): void {
         this.hungerLabels.forEach((label, index) => {
             if (!label) return;
             const needs = this.checkIn?.getCatNeeds(index + 1);
             label.node.active = !!needs;
             if (needs) label.string = `Hunger: ${needs.hunger}/100`;
+        });
+        this.happinessLabels.forEach((label, index) => {
+            if (!label) return;
+            const needs = this.checkIn?.getCatNeeds(index + 1);
+            label.node.active = !!needs;
+            if (needs) label.string = `Happiness: ${needs.happiness}/100`;
         });
     }
 }
