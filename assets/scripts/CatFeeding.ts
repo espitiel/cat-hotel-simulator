@@ -22,6 +22,9 @@ export class CatFeeding extends Component {
     @property(Node)
     petButton: Node | null = null;
 
+    @property(Node)
+    cleanButton: Node | null = null;
+
     // These arrays follow the room order in GuestCheckIn.
     @property([Node])
     roomFloors: Node[] = [];
@@ -29,11 +32,17 @@ export class CatFeeding extends Component {
     @property([Node])
     feedingPoints: Node[] = [];
 
+    @property([Node])
+    cleaningPoints: Node[] = [];
+
     @property([Label])
     hungerLabels: Label[] = [];
 
     @property([Label])
     happinessLabels: Label[] = [];
+
+    @property([Label])
+    cleanlinessLabels: Label[] = [];
 
     @property
     interactionRange = 48;
@@ -53,13 +62,19 @@ export class CatFeeding extends Component {
             this.petButton.on(Node.EventType.TOUCH_END, this.pet, this);
             this.petButton.active = false;
         }
+        if (this.cleanButton) {
+            this.cleanButton.on(Node.EventType.TOUCH_END, this.clean, this);
+            this.cleanButton.active = false;
+        }
     }
 
     protected onDisable(): void {
         this.feedButton?.off(Node.EventType.TOUCH_END, this.feed, this);
         this.petButton?.off(Node.EventType.TOUCH_END, this.pet, this);
+        this.cleanButton?.off(Node.EventType.TOUCH_END, this.clean, this);
         if (this.feedButton) this.feedButton.active = false;
         if (this.petButton) this.petButton.active = false;
+        if (this.cleanButton) this.cleanButton.active = false;
     }
 
     protected update(): void {
@@ -67,14 +82,15 @@ export class CatFeeding extends Component {
         const eligible = this.eligibleRoom() !== 0;
         if (this.feedButton) this.feedButton.active = eligible;
         if (this.petButton) this.petButton.active = eligible;
+        if (this.cleanButton) this.cleanButton.active = this.eligibleRoom(this.cleaningPoints) !== 0;
     }
 
-    private eligibleRoom(): number {
+    private eligibleRoom(points: Node[] = this.feedingPoints): number {
         if (!this.checkIn || !this.caretaker) return 0;
         const world = this.caretaker.worldPosition;
         for (let i = 0; i < this.roomFloors.length; i++) {
             const floor = this.roomFloors[i];
-            const point = this.feedingPoints[i];
+            const point = points[i];
             const transform = floor?.getComponent(UITransform);
             if (!floor || !point || !transform || !this.checkIn.getCatNeeds(i + 1)) continue;
             floor.inverseTransformPoint(this.localPosition, world);
@@ -122,6 +138,22 @@ export class CatFeeding extends Component {
             : `Room ${roomId} Cat Petted! Happiness: ${happiness}/100`);
     }
 
+    private clean(): void {
+        // Check the target again on release so a stale button cannot clean remotely.
+        const roomId = this.eligibleRoom(this.cleaningPoints);
+        const room = roomId && this.checkIn ? this.checkIn.getRoomCleanliness(roomId) : null;
+        if (!room) return;
+        if (room.cleanliness === 100) {
+            this.feedback?.showMessage('Room is Already Clean!');
+            return;
+        }
+        const cleanliness = room.clean();
+        this.updateCareLabels();
+        this.feedback?.showMessage(cleanliness === 100
+            ? `Room ${roomId} is Spotless!`
+            : `Room ${roomId} Cleaned! Cleanliness: ${cleanliness}/100`);
+    }
+
     private updateCareLabels(): void {
         this.hungerLabels.forEach((label, index) => {
             if (!label) return;
@@ -134,6 +166,12 @@ export class CatFeeding extends Component {
             const needs = this.checkIn?.getCatNeeds(index + 1);
             label.node.active = !!needs;
             if (needs) label.string = `Happiness: ${needs.happiness}/100`;
+        });
+        this.cleanlinessLabels.forEach((label, index) => {
+            if (!label) return;
+            const room = this.checkIn?.getRoomCleanliness(index + 1);
+            label.node.active = !!room;
+            if (room) label.string = `Cleanliness: ${room.cleanliness}/100`;
         });
     }
 }
