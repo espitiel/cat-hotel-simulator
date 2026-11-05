@@ -1,6 +1,7 @@
 import { _decorator, Component, Label, Node } from 'cc';
 import { CustomerArrival } from './CustomerArrival';
 import { ProximityInteraction } from './ProximityInteraction';
+import { CatNeeds } from './CatNeeds';
 
 const { ccclass, property } = _decorator;
 
@@ -10,6 +11,7 @@ interface GuestRoom {
     assignedCatId: string | null;
     catVisual: Node | null;
     statusLabel: Label;
+    needs: CatNeeds | null;
 }
 
 /** Assigns sequential customer visits to the first available room. */
@@ -46,6 +48,7 @@ export class GuestCheckIn extends Component {
             assignedCatId: null,
             catVisual: visuals[index] || null,
             statusLabel: label,
+            needs: null,
         }));
         for (const room of this.rooms) {
             if (room.catVisual) room.catVisual.active = false;
@@ -87,6 +90,7 @@ export class GuestCheckIn extends Component {
         this.visitCheckedIn = true;
         room.occupied = true;
         room.assignedCatId = catId;
+        room.needs = new CatNeeds();
         room.catVisual.active = true;
         this.updateRoomLabels();
         this.reception.showMessage(`Check-in Complete! Room ${room.id} Occupied.`);
@@ -106,5 +110,11 @@ export class GuestCheckIn extends Component {
         for (const room of this.rooms) {
             if (room.statusLabel) room.statusLabel.string = room.occupied ? 'Occupied' : 'Empty';
         }
+    }
+
+    /** Only occupied rooms expose their checked-in cat's needs. */
+    public getCatNeeds(roomId: number): CatNeeds | null {
+        const room = this.rooms.find((entry) => entry.id === roomId);
+        return room && room.occupied && room.assignedCatId ? room.needs : null;
     }
 }
