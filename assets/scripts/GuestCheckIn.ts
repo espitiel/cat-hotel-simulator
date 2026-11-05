@@ -4,7 +4,15 @@ import { ProximityInteraction } from './ProximityInteraction';
 
 const { ccclass, property } = _decorator;
 
-/** The first check-in: one waiting customer and one guest cat. */
+interface GuestRoom {
+    id: number;
+    occupied: boolean;
+    assignedCatId: string | null;
+    catVisual: Node | null;
+    statusLabel: Label;
+}
+
+/** Assigns sequential customer visits to the first available room. */
 @ccclass('GuestCheckIn')
 export class GuestCheckIn extends Component {
     @property(CustomerArrival)
@@ -13,19 +21,35 @@ export class GuestCheckIn extends Component {
     @property(ProximityInteraction)
     reception: ProximityInteraction | null = null;
 
+    // Retain the original Room 1 reference from the first prototype.
     @property(Node)
     guestCat: Node | null = null;
 
-    // Room labels are ordered by room number, ready for additional rooms later.
+    @property([Node])
+    additionalGuestCats: Node[] = [];
+
+    @property([String])
+    guestCatIds: string[] = [];
+
     @property([Label])
     roomStatusLabels: Label[] = [];
 
-    private rooms: boolean[] = [];
-    private checkedIn = false;
+    private rooms: GuestRoom[] = [];
+    private visitIndex = 0;
+    private visitCheckedIn = false;
 
     protected onLoad(): void {
-        this.rooms = this.roomStatusLabels.map(() => false);
-        if (this.guestCat) this.guestCat.active = false;
+        const visuals = [this.guestCat, ...this.additionalGuestCats];
+        this.rooms = this.roomStatusLabels.map((label, index) => ({
+            id: index + 1,
+            occupied: false,
+            assignedCatId: null,
+            catVisual: visuals[index] || null,
+            statusLabel: label,
+        }));
+        for (const room of this.rooms) {
+            if (room.catVisual) room.catVisual.active = false;
+        }
         this.updateRoomLabels();
     }
 
@@ -39,29 +63,48 @@ export class GuestCheckIn extends Component {
 
     private checkIn(): void {
         if (!this.reception) return;
-        if (this.checkedIn) {
-            this.reception.showMessage('Room 1 is already occupied.');
+        const room = this.rooms.find((entry) => !entry.occupied);
+        if (!room) {
+            this.reception.showMessage('Hotel Full! No Rooms Available.');
+            return;
+        }
+        if (this.visitCheckedIn) {
+            this.reception.showMessage('Customer Already Checked In.');
             return;
         }
         if (!this.customer || this.customer.state !== 'Waiting') {
             this.reception.showMessage('Please wait for the customer.');
             return;
         }
-        if (!this.guestCat || this.rooms.length === 0 || this.rooms[0]) {
-            this.reception.showMessage('Room 1 is unavailable.');
+        const catId = this.guestCatIds[this.visitIndex];
+        if (!room.catVisual || !catId) {
+            this.reception.showMessage('Guest cat is unavailable.');
             return;
         }
 
-        this.rooms[0] = true;
-        this.checkedIn = true;
-        this.guestCat.active = true;
+        // Complete the visit before scheduling the next, so the seat is released.
+        if (!this.customer.completeVisit()) return;
+        this.visitCheckedIn = true;
+        room.occupied = true;
+        room.assignedCatId = catId;
+        room.catVisual.active = true;
         this.updateRoomLabels();
-        this.reception.showMessage('Room 1 check-in complete!');
+        this.reception.showMessage(`Check-in Complete! Room ${room.id} Occupied.`);
+
+        if (this.rooms.some((entry) => !entry.occupied) && this.visitIndex + 1 < this.guestCatIds.length) {
+            this.scheduleOnce(this.startNextVisit, 1.5);
+        }
+    }
+
+    private startNextVisit(): void {
+        if (!this.customer || !this.visitCheckedIn || !this.customer.startNextVisit()) return;
+        this.visitIndex++;
+        this.visitCheckedIn = false;
     }
 
     private updateRoomLabels(): void {
-        this.roomStatusLabels.forEach((label, index) => {
-            if (label) label.string = this.rooms[index] ? 'Occupied' : 'Empty';
-        });
+        for (const room of this.rooms) {
+            if (room.statusLabel) room.statusLabel.string = room.occupied ? 'Occupied' : 'Empty';
+        }
     }
 }

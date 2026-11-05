@@ -17,17 +17,39 @@ export class CustomerArrival extends Component {
     @property
     speed = 100;
 
-    public state: 'Walking' | 'Waiting' = 'Walking';
+    public state: 'Walking' | 'Waiting' | 'Completed' = 'Walking';
     private waypointIndex = 0;
     private readonly destination = new Vec3();
+    private readonly entrancePosition = new Vec3();
 
     /** The seat is occupied once this customer reaches it. */
     public get occupiedSeat(): Node | null {
         return this.state === 'Waiting' ? this.waitingSeat : null;
     }
 
-    protected start(): void {
+    protected onLoad(): void {
+        this.entrancePosition.set(this.node.position);
         if (this.waitingIndicator) this.waitingIndicator.active = false;
+    }
+
+    /** Finish this visit and release the single waiting seat. */
+    public completeVisit(): boolean {
+        if (this.state !== 'Waiting') return false;
+        this.state = 'Completed';
+        if (this.waitingIndicator) this.waitingIndicator.active = false;
+        this.node.active = false;
+        return true;
+    }
+
+    /** Reuse the same character and route for a new visit. */
+    public startNextVisit(): boolean {
+        if (this.state !== 'Completed') return false;
+        this.waypointIndex = 0;
+        this.node.setPosition(this.entrancePosition);
+        if (this.waitingIndicator) this.waitingIndicator.active = false;
+        this.state = 'Walking';
+        this.node.active = true;
+        return true;
     }
 
     protected update(deltaTime: number): void {
