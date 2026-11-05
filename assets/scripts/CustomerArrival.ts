@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Vec3 } from 'cc';
+import { _decorator, Component, Label, Node, Vec3 } from 'cc';
 
 const { ccclass, property } = _decorator;
 
@@ -21,6 +21,7 @@ export class CustomerArrival extends Component {
     private waypointIndex = 0;
     private readonly destination = new Vec3();
     private readonly entrancePosition = new Vec3();
+    private waitingText = 'Waiting';
 
     /** The seat is occupied once this customer reaches it. */
     public get occupiedSeat(): Node | null {
@@ -42,9 +43,10 @@ export class CustomerArrival extends Component {
     }
 
     /** Reuse the same character and route for a new visit. */
-    public startNextVisit(): boolean {
+    public startNextVisit(waitingText = 'Waiting'): boolean {
         if (this.state !== 'Completed') return false;
         this.waypointIndex = 0;
+        this.waitingText = waitingText;
         this.node.setPosition(this.entrancePosition);
         if (this.waitingIndicator) this.waitingIndicator.active = false;
         this.state = 'Walking';
@@ -75,7 +77,11 @@ export class CustomerArrival extends Component {
                     this.waypointIndex++;
                 } else {
                     this.state = 'Waiting';
-                    if (this.waitingIndicator) this.waitingIndicator.active = true;
+                    if (this.waitingIndicator) {
+                        const label = this.waitingIndicator.getComponent(Label);
+                        if (label) label.string = this.waitingText;
+                        this.waitingIndicator.active = true;
+                    }
                 }
             } else {
                 this.node.setPosition(position.x + dx / distance * distanceLeft, position.y + dy / distance * distanceLeft, position.z);
