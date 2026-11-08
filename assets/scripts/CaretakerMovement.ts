@@ -29,6 +29,7 @@ export class CaretakerMovement extends Component {
     private activeTouchId: number | null = null;
     private readonly origin = new Vec2();
     private readonly input = new Vec2();
+    private readonly corner = new Vec3();
     private dragged = false;
     private touchStarted = 0;
     private walk: { route: Point[]; index: number; valid: () => boolean; finish: (arrived: boolean) => void } | null = null;
@@ -86,7 +87,7 @@ export class CaretakerMovement extends Component {
         const tap = !this.dragged && Date.now() - this.touchStarted <= 450 &&
             Vec2.distance(event.getUILocation(), this.origin) <= this.deadZone;
         this.stopMovement();
-        if (tap) this.node.emit('caretaker-tap', event.getLocation());
+        if (tap) this.node.emit('caretaker-tap', event.getLocation(), event.windowId);
     }
 
     private onTouchCancel(event: EventTouch): void {
@@ -126,8 +127,8 @@ export class CaretakerMovement extends Component {
     private advanceWalk(deltaTime: number): void {
         const walk = this.walk;
         const caretaker = this.caretaker;
-        if (!walk || !caretaker?.parent || this.activeTouchId !== null) return;
-        if (!walk.valid()) {
+        if (!walk || this.activeTouchId !== null) return;
+        if (!caretaker?.parent || !walk.valid()) {
             this.cancelWalk();
             walk.finish(false);
             return;
@@ -197,16 +198,23 @@ export class CaretakerMovement extends Component {
         const transform = obstacle.getComponent(UITransform);
         if (!transform) return null;
         const box = transform.getBoundingBoxToWorld();
-        const corners = [
-            new Vec3(box.xMin, box.yMin, 0), new Vec3(box.xMax, box.yMin, 0),
-            new Vec3(box.xMin, box.yMax, 0), new Vec3(box.xMax, box.yMax, 0),
-        ];
-        for (const corner of corners) parent.inverseTransformPoint(corner, corner);
+        let left = Infinity;
+        let right = -Infinity;
+        let bottom = Infinity;
+        let top = -Infinity;
+        for (let i = 0; i < 4; i++) {
+            this.corner.set(i % 2 ? box.xMax : box.xMin, i < 2 ? box.yMin : box.yMax, 0);
+            parent.inverseTransformPoint(this.corner, this.corner);
+            left = Math.min(left, this.corner.x);
+            right = Math.max(right, this.corner.x);
+            bottom = Math.min(bottom, this.corner.y);
+            top = Math.max(top, this.corner.y);
+        }
         return {
-            left: Math.min(...corners.map((p) => p.x)) - this.footHalfWidth,
-            right: Math.max(...corners.map((p) => p.x)) + this.footHalfWidth,
-            bottom: Math.min(...corners.map((p) => p.y)) - this.footHalfHeight,
-            top: Math.max(...corners.map((p) => p.y)) + this.footHalfHeight,
+            left: left - this.footHalfWidth,
+            right: right + this.footHalfWidth,
+            bottom: bottom - this.footHalfHeight,
+            top: top + this.footHalfHeight,
         };
     }
 }

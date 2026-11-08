@@ -89,12 +89,12 @@ export class CaretakerInteraction extends Component {
         if (this.selection && !this.valid(this.selection)) this.close();
     }
 
-    private hit(node: Node | null, screenPoint: Vec2): boolean {
-        return !!node?.activeInHierarchy && !!node.getComponent(UITransform)?.hitTest(screenPoint);
+    private hit(node: Node | null, screenPoint: Vec2, windowId: number): boolean {
+        return !!node?.activeInHierarchy && !!node.getComponent(UITransform)?.hitTest(screenPoint, windowId);
     }
 
-    private tap(screenPoint: Vec2): void {
-        if (this.hit(this.desk, screenPoint)) {
+    private tap(screenPoint: Vec2, windowId: number): void {
+        if (this.hit(this.desk, screenPoint, windowId)) {
             this.close();
             const reception = this.reception;
             if (reception?.interactionPoint) {
@@ -106,9 +106,9 @@ export class CaretakerInteraction extends Component {
             }
             return;
         }
-        const cat = this.cats.findIndex(node => this.hit(node, screenPoint));
+        const cat = this.cats.findIndex(node => this.hit(node, screenPoint, windowId));
         const cleaning = cat < 0;
-        const index = cleaning ? this.markers.findIndex(node => this.hit(node, screenPoint)) : cat;
+        const index = cleaning ? this.markers.findIndex(node => this.hit(node, screenPoint, windowId)) : cat;
         if (index < 0) { this.close(); return; }
         this.movement?.cancelWalk();
         this.close();
