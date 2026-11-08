@@ -18,6 +18,7 @@ export interface CompletedStaySnapshot {
     readonly roomId: number;
     readonly catId: string;
     readonly duration: number;
+    readonly basePayment: number;
     readonly hunger: number;
     readonly happiness: number;
     readonly energy: number;
@@ -48,6 +49,7 @@ interface GuestStay {
     roomId: number;
     catId: string;
     duration: number;
+    basePayment: number;
     remaining: number;
     state: StayState;
     checkedOut: boolean;
@@ -58,6 +60,7 @@ interface GuestStay {
 
 interface GuestRoom {
     id: number;
+    upgrades: RoomUpgradeState;
     occupied: boolean;
     assignedCatId: string | null;
     catVisual: Node | null;
@@ -66,6 +69,15 @@ interface GuestRoom {
     cleanliness: RoomCleanliness | null;
     stay: GuestStay | null;
 }
+
+export interface RoomUpgradeState {
+    level: 1 | 2;
+    basePayment: number;
+    comfortDecoration: boolean;
+}
+
+export const COMFORT_PRICE = 60;
+export const LEVEL_TWO_PRICE = 400;
 
 /** Owns rooms, stays, and the single customer's check-in/pickup queue. */
 @ccclass('GuestCheckIn')
@@ -108,7 +120,7 @@ export class GuestCheckIn extends Component {
     private gameInactive = false;
     private skipResumeFrame = false;
     private readonly wallet = new HotelWallet();
-    private readonly standardRoomBasePayment = 100;
+    private hotelRank: 1 | 2 = 1;
     private lastCheckoutReceipt: Readonly<CheckoutReceipt> | null = null;
 
     protected onLoad(): void {
@@ -117,6 +129,7 @@ export class GuestCheckIn extends Component {
             id: index + 1, occupied: false, assignedCatId: null,
             catVisual: visuals[index] || null, statusLabel: label,
             needs: null, cleanliness: null, stay: null,
+            upgrades: { level: 1, basePayment: 100, comfortDecoration: false },
         }));
         for (const room of this.rooms) if (room.catVisual) room.catVisual.active = false;
         this.updateCoinLabel();
@@ -197,7 +210,7 @@ export class GuestCheckIn extends Component {
             const satisfaction = satisfactionRating(average, qualityAfter);
             stay.snapshot = Object.freeze({
                 stayId: stay.id, customerVisitId: stay.customerVisitId,
-                roomId: stay.roomId, catId: stay.catId, duration: stay.duration,
+                roomId: stay.roomId, catId: stay.catId, duration: stay.duration, basePayment: stay.basePayment,
                 hunger: needs.hunger, happiness: needs.happiness,
                 energy: needs.energy, cleanliness: room.cleanliness.cleanliness,
                 trackedDuration: stay.trackedDuration,
@@ -244,7 +257,8 @@ export class GuestCheckIn extends Component {
         room.cleanliness = new RoomCleanliness();
         room.stay = {
             id: this.nextStayId++, customerVisitId: visit.id, roomId: room.id,
-            catId, duration, remaining: duration, state: 'Active', checkedOut: false, snapshot: null,
+            catId, duration, basePayment: room.upgrades.basePayment,
+            remaining: duration, state: 'Active', checkedOut: false, snapshot: null,
             weightedQualitySum: 0, trackedDuration: 0,
         };
         room.catVisual.active = true;
@@ -266,7 +280,7 @@ export class GuestCheckIn extends Component {
             return;
         }
         const snapshot = stay.snapshot;
-        const earned = Math.round(this.standardRoomBasePayment * snapshot.multiplier);
+        const earned = Math.round(snapshot.basePayment * snapshot.multiplier);
         if (!this.wallet.canCreditCheckout(stay.id, earned)) {
             this.reception.showMessage('Checkout payment unavailable.');
             return;
@@ -278,12 +292,14 @@ export class GuestCheckIn extends Component {
         this.wallet.creditCheckout(stay.id, earned);
         this.lastCheckoutReceipt = Object.freeze({
             stayId: stay.id, roomId: room.id, score: snapshot.satisfactionScore,
-            rating: snapshot.rating, basePayment: this.standardRoomBasePayment,
+            rating: snapshot.rating, basePayment: snapshot.basePayment,
             multiplier: snapshot.multiplier, earned, balance: this.wallet.balance,
         });
         room.needs?.cancelRest();
         stay.state = 'Completed';
         this.completedStays.push(stay.snapshot);
+        const progress = this.getRankProgress();
+        if (progress.completed >= 5 && progress.average >= 60) this.hotelRank = 2;
         this.pickupQueue = this.pickupQueue.filter((id) => id !== stay.id);
         if (room.catVisual) room.catVisual.active = false;
         room.occupied = false;
@@ -368,6 +384,36 @@ export class GuestCheckIn extends Component {
     }
 
     public getCoinBalance(): number { return this.wallet.balance; }
+
+    public getRankProgress(): { rank: 1 | 2; completed: number; average: number } {
+        const recent = this.completedStays.slice(-5);
+        const total = recent.reduce((sum, stay) => sum + stay.satisfactionScore, 0);
+        return { rank: this.hotelRank, completed: this.completedStays.length,
+            average: recent.length ? total / recent.length : 0 };
+    }
+
+    public getRoomUpgrade(roomId: number): Readonly<RoomUpgradeState> | null {
+        const room = this.rooms.find(entry => entry.id === roomId);
+        return room ? { ...room.upgrades } : null;
+    }
+
+    public purchaseUpgrade(roomId: number, kind: 'comfort' | 'level'): string {
+        const room = this.rooms.find(entry => entry.id === roomId);
+        if (!room || (kind === 'comfort' && roomId !== 1)) return 'Upgrade unavailable.';
+        const upgrade = room.upgrades;
+        if (kind === 'comfort' ? upgrade.comfortDecoration : upgrade.level === 2) return 'Already owned.';
+        if (kind === 'level' && this.hotelRank < 2) return 'Requires Hotel Rank 2.';
+        if (!this.wallet.trySpend(kind === 'comfort' ? COMFORT_PRICE : LEVEL_TWO_PRICE)) return 'Not enough coins.';
+        if (kind === 'comfort') {
+            upgrade.comfortDecoration = true;
+        } else {
+            upgrade.level = 2;
+            upgrade.basePayment = 125;
+        }
+        this.updateCoinLabel();
+        this.node.emit('upgrades-changed');
+        return kind === 'comfort' ? 'Room 1 comfort decoration purchased!' : `Room ${roomId} upgraded to Level 2!`;
+    }
     public hasPaidForStay(stayId: number): boolean { return this.wallet.hasPaid(stayId); }
     public getLastCheckoutReceipt(): Readonly<CheckoutReceipt> | null { return this.lastCheckoutReceipt; }
 

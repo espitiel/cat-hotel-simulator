@@ -38,6 +38,12 @@ export class HotelWallet {
     public get balance(): number { return this.balanceValue; }
     public hasPaid(stayId: number): boolean { return this.paidStays.has(stayId); }
 
+    public trySpend(coins: number): boolean {
+        if (!Number.isSafeInteger(coins) || coins <= 0 || coins > this.balanceValue) return false;
+        this.balanceValue -= coins;
+        return true;
+    }
+
     public canCreditCheckout(stayId: number, coins: number): boolean {
         return Number.isSafeInteger(stayId) && stayId > 0 && !this.hasPaid(stayId) &&
             Number.isSafeInteger(coins) && coins >= 0 && Number.isSafeInteger(this.balanceValue + coins);
