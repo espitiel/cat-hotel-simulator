@@ -109,6 +109,9 @@
       },
       {
         "__id__": 817
+      },
+      {
+        "__id__": 827
       }
     ],
     "_prefab": null,
@@ -31893,5 +31896,37 @@
   {
     "__type__": "cc.PostSettingsInfo",
     "_toneMappingType": 0
+  },
+  {
+    "__type__": "3e657AzPuNOK44/YNkxSPLJ",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 2
+    },
+    "_enabled": true,
+    "__prefab": null,
+    "movement": {
+      "__id__": 816
+    },
+    "care": {
+      "__id__": 772
+    },
+    "reception": {
+      "__id__": 675
+    },
+    "desk": {
+      "__id__": 460
+    },
+    "cats": [
+      {
+        "__id__": 571
+      },
+      {
+        "__id__": 574
+      }
+    ],
+    "_id": "93ea25d171934dee86a664"
   }
 ]

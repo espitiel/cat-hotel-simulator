@@ -1,4 +1,6 @@
 import { _decorator, Component, EventTouch, game, Game, Node, UITransform, Vec2, Vec3 } from 'cc';
+import { clearSegment, findWalkingRoute } from './WalkingRoute';
+import type { Point } from './WalkingRoute';
 
 const { ccclass, property } = _decorator;
 
@@ -27,22 +29,25 @@ export class CaretakerMovement extends Component {
     private activeTouchId: number | null = null;
     private readonly origin = new Vec2();
     private readonly input = new Vec2();
+    private dragged = false;
+    private touchStarted = 0;
+    private walk: { route: Point[]; index: number; valid: () => boolean; finish: (arrived: boolean) => void } | null = null;
 
     protected onEnable(): void {
         this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
         this.node.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
         this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
-        this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
-        game.on(Game.EVENT_HIDE, this.stopMovement, this);
+        this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
+        game.on(Game.EVENT_HIDE, this.resetControls, this);
     }
 
     protected onDisable(): void {
         this.node.off(Node.EventType.TOUCH_START, this.onTouchStart, this);
         this.node.off(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
         this.node.off(Node.EventType.TOUCH_END, this.onTouchEnd, this);
-        this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
-        game.off(Game.EVENT_HIDE, this.stopMovement, this);
-        this.stopMovement();
+        this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
+        game.off(Game.EVENT_HIDE, this.resetControls, this);
+        this.resetControls();
     }
 
     private onTouchStart(event: EventTouch): void {
@@ -51,6 +56,8 @@ export class CaretakerMovement extends Component {
         this.activeTouchId = event.getID();
         this.origin.set(event.getUILocation());
         this.input.set(0, 0);
+        this.dragged = false;
+        this.touchStarted = Date.now();
     }
 
     private onTouchMove(event: EventTouch): void {
@@ -66,11 +73,86 @@ export class CaretakerMovement extends Component {
 
         // Unit direction with a smoothly increasing magnitude, clamped to one.
         const magnitude = Math.min(1, (distance - this.deadZone) / (this.joystickRadius - this.deadZone));
+        if (!this.dragged) {
+            this.dragged = true;
+            this.cancelWalk();
+            this.node.emit('caretaker-drag');
+        }
         this.input.set(dx / distance * magnitude, dy / distance * magnitude);
     }
 
     private onTouchEnd(event: EventTouch): void {
+        if (event.getID() !== this.activeTouchId) return;
+        const tap = !this.dragged && Date.now() - this.touchStarted <= 450 &&
+            Vec2.distance(event.getUILocation(), this.origin) <= this.deadZone;
+        this.stopMovement();
+        if (tap) this.node.emit('caretaker-tap', event.getLocation());
+    }
+
+    private onTouchCancel(event: EventTouch): void {
         if (event.getID() === this.activeTouchId) this.stopMovement();
+    }
+
+    private resetControls(): void {
+        this.stopMovement();
+        this.cancelWalk();
+        this.node.emit('caretaker-drag');
+    }
+
+    public cancelWalk(): void { this.walk = null; }
+
+    public walkTo(target: Node, valid: () => boolean, finish: (arrived: boolean) => void): void {
+        this.cancelWalk();
+        const parent = this.caretaker?.parent;
+        if (!parent || !this.caretaker || this.activeTouchId !== null || !valid()) {
+            finish(false);
+            return;
+        }
+        const goal = parent.inverseTransformPoint(new Vec3(), target.worldPosition);
+        const route = findWalkingRoute(this.caretaker.position, goal, {
+            left: this.minX, right: this.maxX, bottom: this.minY, top: this.maxY,
+        }, this.navigationBounds(parent));
+        if (route) this.walk = { route, index: 0, valid, finish };
+        else finish(false);
+    }
+
+    private navigationBounds(parent: Node) {
+        return this.obstacles.filter(node => node?.activeInHierarchy)
+            .map(node => this.obstacleBounds(node, parent))
+            .filter(box => box !== null)
+            .map(box => ({ ...box, bottom: box.bottom - this.footOffsetY, top: box.top - this.footOffsetY }));
+    }
+
+    private advanceWalk(deltaTime: number): void {
+        const walk = this.walk;
+        const caretaker = this.caretaker;
+        if (!walk || !caretaker?.parent || this.activeTouchId !== null) return;
+        if (!walk.valid()) {
+            this.cancelWalk();
+            walk.finish(false);
+            return;
+        }
+        const obstacles = this.navigationBounds(caretaker.parent);
+        let budget = this.speed * deltaTime;
+        while (budget > 0 && walk.index < walk.route.length) {
+            const from = caretaker.position;
+            const to = walk.route[walk.index];
+            const distance = Math.hypot(to.x - from.x, to.y - from.y);
+            const fraction = distance > budget ? budget / distance : 1;
+            const next = { x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction };
+            if (!clearSegment(from, next, obstacles)) {
+                this.cancelWalk();
+                walk.finish(false);
+                return;
+            }
+            caretaker.setPosition(next.x, next.y, from.z);
+            budget -= Math.min(distance, budget);
+            if (fraction === 1) walk.index++;
+        }
+        if (walk.index === walk.route.length) {
+            this.cancelWalk();
+            walk.finish(walk.valid());
+        }
     }
 
     private stopMovement(): void {
@@ -79,6 +161,10 @@ export class CaretakerMovement extends Component {
     }
 
     protected update(deltaTime: number): void {
+        if (this.walk) {
+            this.advanceWalk(deltaTime);
+            return;
+        }
         if (!this.caretaker || !this.caretaker.parent || (this.input.x === 0 && this.input.y === 0)) return;
         const position = this.caretaker.position;
         const startX = position.x;

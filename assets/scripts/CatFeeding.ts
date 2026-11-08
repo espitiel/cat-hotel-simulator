@@ -4,6 +4,8 @@ import { ProximityInteraction } from './ProximityInteraction';
 
 const { ccclass, property } = _decorator;
 
+export type CareAction = 'feed' | 'pet' | 'clean' | 'rest';
+
 /** Contextual cat-care actions shared by all configured guest rooms. */
 @ccclass('CatFeeding')
 export class CatFeeding extends Component {
@@ -65,6 +67,7 @@ export class CatFeeding extends Component {
 
     private readonly localPosition = new Vec3();
     private gameInactive = false;
+    public contextMenuOpen = false;
     private pressed: { [action: string]: { stayId: number; pointerId: number } | null } = {};
 
     protected onEnable(): void {
@@ -135,11 +138,11 @@ export class CatFeeding extends Component {
 
     private refreshCare(): void {
         this.updateCareLabels();
-        const eligible = this.eligibleRoom() !== 0;
+        const eligible = !this.contextMenuOpen && this.eligibleRoom() !== 0;
         if (this.feedButton) this.feedButton.active = eligible;
         if (this.petButton) this.petButton.active = eligible;
-        if (this.cleanButton) this.cleanButton.active = this.eligibleRoom(this.cleaningPoints) !== 0;
-        if (this.restButton) this.restButton.active = this.eligibleRoom(this.restPoints) !== 0;
+        if (this.cleanButton) this.cleanButton.active = !this.contextMenuOpen && this.eligibleRoom(this.cleaningPoints) !== 0;
+        if (this.restButton) this.restButton.active = !this.contextMenuOpen && this.eligibleRoom(this.restPoints) !== 0;
     }
 
     private eligibleRoom(points: Node[] = this.feedingPoints): number {
@@ -189,8 +192,11 @@ export class CatFeeding extends Component {
     }
 
     private feed(event: EventTouch): void {
-        // Recheck at release in case the caretaker moved or the room changed.
         const roomId = this.matchingRoom('feed', this.feedingPoints, event);
+        if (roomId) this.applyFeed(roomId);
+    }
+
+    private applyFeed(roomId: number): void {
         const needs = roomId && this.checkIn ? this.checkIn.getCatNeeds(roomId) : null;
         if (!needs) return;
         if (needs.hunger === 0) {
@@ -205,8 +211,11 @@ export class CatFeeding extends Component {
     }
 
     private pet(event: EventTouch): void {
-        // Reuse the feeding check, including the room boundary and distance.
         const roomId = this.matchingRoom('pet', this.feedingPoints, event);
+        if (roomId) this.applyPet(roomId);
+    }
+
+    private applyPet(roomId: number): void {
         const needs = roomId && this.checkIn ? this.checkIn.getCatNeeds(roomId) : null;
         if (!needs) return;
         if (needs.happiness === 100) {
@@ -221,8 +230,11 @@ export class CatFeeding extends Component {
     }
 
     private clean(event: EventTouch): void {
-        // Check the target again on release so a stale button cannot clean remotely.
         const roomId = this.matchingRoom('clean', this.cleaningPoints, event);
+        if (roomId) this.applyClean(roomId);
+    }
+
+    private applyClean(roomId: number): void {
         const room = roomId && this.checkIn ? this.checkIn.getRoomCleanliness(roomId) : null;
         if (!room) return;
         if (room.cleanliness === 100) {
@@ -237,8 +249,12 @@ export class CatFeeding extends Component {
     }
 
     private rest(event: EventTouch): void {
-        if (this.gameInactive) return;
         const roomId = this.matchingRoom('rest', this.restPoints, event);
+        if (roomId) this.applyRest(roomId);
+    }
+
+    private applyRest(roomId: number): void {
+        if (this.gameInactive) return;
         const needs = roomId && this.checkIn ? this.checkIn.getCatNeeds(roomId) : null;
         if (!needs) return;
         if (needs.resting) {
@@ -252,6 +268,24 @@ export class CatFeeding extends Component {
         if (!needs.startRest()) return;
         this.updateCareLabels();
         this.feedback?.showMessage(`Room ${roomId} Cat is Resting...`);
+    }
+
+    public actionPoints(action: CareAction): Node[] {
+        if (action === 'clean') return this.cleaningPoints;
+        if (action === 'rest') return this.restPoints;
+        return this.feedingPoints;
+    }
+
+    public performCare(action: CareAction, roomId: number, stayId: number): boolean {
+        if (this.gameInactive || this.checkIn?.getActiveStayId(roomId) !== stayId ||
+            this.eligibleRoom(this.actionPoints(action)) !== roomId) return false;
+        switch (action) {
+        case 'feed': this.applyFeed(roomId); break;
+        case 'pet': this.applyPet(roomId); break;
+        case 'clean': this.applyClean(roomId); break;
+        case 'rest': this.applyRest(roomId); break;
+        }
+        return true;
     }
 
     private updateCareLabels(): void {

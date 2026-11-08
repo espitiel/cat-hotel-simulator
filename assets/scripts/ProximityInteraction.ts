@@ -52,11 +52,12 @@ export class ProximityInteraction extends Component {
         return distance <= Math.max(0, this.interactionRange);
     }
 
-    private interact(): void {
-        if (!this.isInRange()) return;
+    public interact(): boolean {
+        if (!this.isInRange()) return false;
         this.showMessage(this.messageText);
         // Future hotel objects can listen for this event to perform their own action.
         this.node.emit('interaction', this);
+        return true;
     }
 
     /** Show brief feedback without adding another input-blocking UI element. */
