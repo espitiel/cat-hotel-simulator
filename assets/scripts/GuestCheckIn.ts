@@ -344,7 +344,7 @@ export class GuestCheckIn extends Component {
                 const remainder = seconds % 60;
                 const minutesText = (minutes < 10 ? '0' : '') + minutes;
                 const secondsText = (remainder < 10 ? '0' : '') + remainder;
-                text = `Occupied ${minutesText}:${secondsText}`;
+                text = `Occupied · ${minutesText}:${secondsText}`;
             } else if (room.stay?.state === 'ReadyForPickup') {
                 text = 'Ready for Pickup';
             }
@@ -361,6 +361,14 @@ export class GuestCheckIn extends Component {
     public getActiveStayId(roomId: number): number | null {
         const room = this.rooms.find((entry) => entry.id === roomId);
         return room?.stay?.state === 'Active' ? room.stay.id : null;
+    }
+
+    public getRoomStayId(roomId: number): number | null {
+        return this.rooms.find(room => room.id === roomId)?.stay?.id ?? null;
+    }
+
+    public getRoomStatus(roomId: number): string {
+        return this.rooms.find(room => room.id === roomId)?.statusLabel?.string ?? 'Empty';
     }
 
     public getRoomCleanliness(roomId: number): RoomCleanliness | null {

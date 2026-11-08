@@ -1,4 +1,4 @@
-import { _decorator, Button, Color, Component, instantiate, Label, Node, UITransform, Vec2 } from 'cc';
+import { _decorator, BlockInputEvents, Button, Color, Component, Graphics, instantiate, Label, Node, UITransform, Vec2 } from 'cc';
 import { CaretakerMovement } from './CaretakerMovement';
 import { CatFeeding } from './CatFeeding';
 import type { CareAction } from './CatFeeding';
@@ -6,6 +6,7 @@ import { ProximityInteraction } from './ProximityInteraction';
 
 const { ccclass, property } = _decorator;
 type Selection = { room: number; stay: number; object: Node; cleaning: boolean };
+const CAT_BUTTON_POSITIONS = { feed: [-240, -87], pet: [-70, -87], rest: [-240, -150], close: [-70, -150] };
 
 @ccclass('CaretakerInteraction')
 export class CaretakerInteraction extends Component {
@@ -18,6 +19,12 @@ export class CaretakerInteraction extends Component {
     private selection: Selection | null = null;
     private markers: Node[] = [];
     private menu: { action: CareAction | 'close'; node: Node }[] = [];
+    private panel: Node | null = null;
+    private panelArt: Graphics | null = null;
+    private panelTitle: Label | null = null;
+    private panelStatus: Label | null = null;
+    private stats: Label[] = [];
+    private lastStats = '';
 
     protected onEnable(): void {
         this.node.on('caretaker-tap', this.tap, this);
@@ -37,11 +44,13 @@ export class CaretakerInteraction extends Component {
     protected onDestroy(): void {
         for (const entry of this.menu) entry.node.destroy();
         for (const marker of this.markers) marker.destroy();
+        this.panel?.destroy();
     }
 
     protected start(): void {
         const care = this.care;
         if (!care) return;
+        this.buildPanel();
         const buttons = [
             { action: 'feed', source: care.feedButton },
             { action: 'pet', source: care.petButton },
@@ -87,6 +96,7 @@ export class CaretakerInteraction extends Component {
             marker.active = this.care?.checkIn?.getActiveStayId(index + 1) != null;
         });
         if (this.selection && !this.valid(this.selection)) this.close();
+        if (this.selection && !this.selection.cleaning) this.refreshPanel(this.selection);
     }
 
     private hit(node: Node | null, screenPoint: Vec2, windowId: number): boolean {
@@ -112,33 +122,41 @@ export class CaretakerInteraction extends Component {
         if (index < 0) { this.close(); return; }
         this.movement?.cancelWalk();
         this.close();
-        const stay = this.care?.checkIn?.getActiveStayId(index + 1);
+        const hotel = this.care?.checkIn;
+        const stay = cleaning ? hotel?.getActiveStayId(index + 1) : hotel?.getRoomStayId(index + 1);
         if (stay == null) { this.reception?.showMessage('That stay is no longer active.'); return; }
         this.selection = { room: index + 1, stay, object: cleaning ? this.markers[index] : this.cats[index], cleaning };
         if (this.care) this.care.contextMenuOpen = true;
-        for (const entry of this.menu) {
-            entry.node.active = entry.action === 'close' || (entry.action === 'clean') === cleaning;
-            if (entry.action === 'close') entry.node.setPosition(cleaning ? -35 : -205, 10, 0);
+        if (cleaning) {
+            for (const entry of this.menu) {
+                entry.node.active = entry.action === 'close' || entry.action === 'clean';
+                if (entry.action === 'close') entry.node.setPosition(-35, 10, 0);
+            }
+        } else if (this.panel) {
+            this.panel.active = true;
+            this.refreshPanel(this.selection);
         }
         this.reception?.showMessage(`Room ${index + 1}: Choose an action.`);
     }
 
     private valid(selection: Selection): boolean {
         return selection.object.activeInHierarchy &&
-            this.care?.checkIn?.getActiveStayId(selection.room) === selection.stay;
+            this.care?.checkIn?.getRoomStayId(selection.room) === selection.stay;
     }
 
     private choose(action: CareAction): void {
         const selected = this.selection;
         this.close();
-        if (!selected || (action === 'clean') !== selected.cleaning || !this.valid(selected)) {
+        if (!selected || (action === 'clean') !== selected.cleaning || !this.valid(selected) ||
+            this.care?.checkIn?.getActiveStayId(selected.room) !== selected.stay) {
             this.reception?.showMessage('That action is no longer available.');
             return;
         }
         const target = this.care?.actionPoints(action)[selected.room - 1];
         if (!target) { this.reception?.showMessage('No reachable action point.'); return; }
         if (this.care) this.care.contextMenuOpen = true;
-        this.movement?.walkTo(target, () => this.valid(selected) && target.activeInHierarchy, arrived => {
+        this.movement?.walkTo(target, () => this.valid(selected) && target.activeInHierarchy &&
+            this.care?.checkIn?.getActiveStayId(selected.room) === selected.stay, arrived => {
             this.close();
             if (!arrived || !this.care?.performCare(action, selected.room, selected.stay)) {
                 this.reception?.showMessage('Action unavailable or unreachable.');
@@ -155,5 +173,79 @@ export class CaretakerInteraction extends Component {
         this.selection = null;
         if (this.care) this.care.contextMenuOpen = false;
         for (const entry of this.menu) entry.node.active = false;
+        if (this.panel) this.panel.active = false;
+    }
+
+    private buildPanel(): void {
+        const panel = new Node('Guest Cat Details');
+        panel.layer = this.node.layer;
+        panel.setParent(this.node);
+        panel.setPosition(-155, 0, 0);
+        panel.addComponent(UITransform).setContentSize(366, 380);
+        panel.addComponent(BlockInputEvents);
+        this.panel = panel;
+        this.panelArt = panel.addComponent(Graphics);
+        this.panelTitle = this.panelText(panel, 154, 24, 338);
+        this.panelStatus = this.panelText(panel, 120, 18, 338);
+        this.stats = [83, 54, 25, -4].map(y => this.panelText(panel, y, 15, 168, -89));
+        panel.active = false;
+    }
+
+    private panelText(parent: Node, y: number, size: number, width: number, x = 0): Label {
+        const node = new Node('Guest Details Text');
+        node.layer = parent.layer;
+        node.setParent(parent);
+        node.setPosition(x, y, 0);
+        node.addComponent(UITransform).setContentSize(width, 29);
+        const label = node.addComponent(Label);
+        label.fontSize = size;
+        label.lineHeight = size + 3;
+        label.color = new Color(84, 48, 35);
+        label.overflow = Label.Overflow.SHRINK;
+        return label;
+    }
+
+    private refreshPanel(selected: Selection): void {
+        const hotel = this.care?.checkIn;
+        const needs = hotel?.getDisplayedCatNeeds(selected.room);
+        const cleanliness = hotel?.getDisplayedRoomCleanliness(selected.room);
+        if (!hotel || !needs || !cleanliness || !this.panelArt || !this.panelTitle || !this.panelStatus) return;
+        const title = `Guest Cat · Room ${selected.room}`;
+        const status = hotel.getRoomStatus(selected.room);
+        if (this.panelTitle.string !== title) this.panelTitle.string = title;
+        if (this.panelStatus.string !== status) this.panelStatus.string = status;
+        const active = hotel.getActiveStayId(selected.room) === selected.stay;
+        for (const { action, node } of this.menu) {
+            if (action === 'clean') continue;
+            const [x, y] = CAT_BUTTON_POSITIONS[action];
+            if (node.position.x !== x || node.position.y !== y) node.setPosition(x, y, 0);
+            node.active = action === 'close' || active;
+        }
+        const key = `${needs.hunger}:${needs.happiness}:${cleanliness.cleanliness}:${needs.energy}`;
+        if (key === this.lastStats) return;
+        this.lastStats = key;
+        const values = [needs.hunger, needs.happiness, cleanliness.cleanliness, needs.energy];
+        const names = ['Hunger ↓', 'Happiness', 'Cleanliness', 'Energy'];
+        const colors = [new Color(225, 136, 117), new Color(227, 161, 179), new Color(141, 183, 132), new Color(135, 167, 208)];
+        const art = this.panelArt;
+        art.clear();
+        art.fillColor = new Color(255, 242, 222);
+        art.strokeColor = new Color(109, 66, 50);
+        art.lineWidth = 3;
+        art.roundRect(-183, -190, 366, 380, 16);
+        art.fill();
+        art.stroke();
+        values.forEach((value, i) => {
+            this.stats[i].string = `${names[i]}: ${value}/100`;
+            const y = 76 - i * 29;
+            art.fillColor = new Color(223, 202, 181);
+            art.rect(3, y, 154, 12);
+            art.fill();
+            if (value > 0) {
+                art.fillColor = colors[i];
+                art.rect(3, y, 154 * value / 100, 12);
+                art.fill();
+            }
+        });
     }
 }

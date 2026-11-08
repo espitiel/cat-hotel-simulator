@@ -1,4 +1,4 @@
-import { _decorator, Component, EventTouch, game, Game, Label, Node, UITransform, Vec3 } from 'cc';
+import { _decorator, Component, EventTouch, game, Game, Node, UITransform, Vec3 } from 'cc';
 import { GuestCheckIn } from './GuestCheckIn';
 import { ProximityInteraction } from './ProximityInteraction';
 
@@ -42,18 +42,6 @@ export class CatFeeding extends Component {
 
     @property([Node])
     restPoints: Node[] = [];
-
-    @property([Label])
-    hungerLabels: Label[] = [];
-
-    @property([Label])
-    happinessLabels: Label[] = [];
-
-    @property([Label])
-    cleanlinessLabels: Label[] = [];
-
-    @property([Label])
-    energyLabels: Label[] = [];
 
     @property([Node])
     restingIndicators: Node[] = [];
@@ -137,7 +125,7 @@ export class CatFeeding extends Component {
     }
 
     private refreshCare(): void {
-        this.updateCareLabels();
+        this.updateRestingIndicators();
         const eligible = !this.contextMenuOpen && this.eligibleRoom() !== 0;
         if (this.feedButton) this.feedButton.active = eligible;
         if (this.petButton) this.petButton.active = eligible;
@@ -204,7 +192,7 @@ export class CatFeeding extends Component {
             return;
         }
         const hunger = needs.feed();
-        this.updateCareLabels();
+        this.updateRestingIndicators();
         this.feedback?.showMessage(hunger === 0
             ? `Room ${roomId} Cat is Full!`
             : `Room ${roomId} Cat Fed! Hunger: ${hunger}/100`);
@@ -223,7 +211,7 @@ export class CatFeeding extends Component {
             return;
         }
         const happiness = needs.pet();
-        this.updateCareLabels();
+        this.updateRestingIndicators();
         this.feedback?.showMessage(happiness === 100
             ? `Room ${roomId} Cat is Very Happy!`
             : `Room ${roomId} Cat Petted! Happiness: ${happiness}/100`);
@@ -242,7 +230,7 @@ export class CatFeeding extends Component {
             return;
         }
         const cleanliness = room.clean();
-        this.updateCareLabels();
+        this.updateRestingIndicators();
         this.feedback?.showMessage(cleanliness === 100
             ? `Room ${roomId} is Spotless!`
             : `Room ${roomId} Cleaned! Cleanliness: ${cleanliness}/100`);
@@ -266,7 +254,7 @@ export class CatFeeding extends Component {
             return;
         }
         if (!needs.startRest()) return;
-        this.updateCareLabels();
+        this.updateRestingIndicators();
         this.feedback?.showMessage(`Room ${roomId} Cat is Resting...`);
     }
 
@@ -288,31 +276,7 @@ export class CatFeeding extends Component {
         return true;
     }
 
-    private updateCareLabels(): void {
-        this.hungerLabels.forEach((label, index) => {
-            if (!label) return;
-            const needs = this.checkIn?.getDisplayedCatNeeds(index + 1);
-            label.node.active = !!needs;
-            if (needs) label.string = `Hunger: ${needs.hunger}/100`;
-        });
-        this.happinessLabels.forEach((label, index) => {
-            if (!label) return;
-            const needs = this.checkIn?.getDisplayedCatNeeds(index + 1);
-            label.node.active = !!needs;
-            if (needs) label.string = `Happiness: ${needs.happiness}/100`;
-        });
-        this.cleanlinessLabels.forEach((label, index) => {
-            if (!label) return;
-            const room = this.checkIn?.getDisplayedRoomCleanliness(index + 1);
-            label.node.active = !!room;
-            if (room) label.string = `Cleanliness: ${room.cleanliness}/100`;
-        });
-        this.energyLabels.forEach((label, index) => {
-            if (!label) return;
-            const needs = this.checkIn?.getDisplayedCatNeeds(index + 1);
-            label.node.active = !!needs;
-            if (needs) label.string = `Energy: ${needs.energy}/100`;
-        });
+    private updateRestingIndicators(): void {
         this.restingIndicators.forEach((indicator, index) => {
             if (indicator) indicator.active = !!this.checkIn?.getCatNeeds(index + 1)?.resting;
         });
